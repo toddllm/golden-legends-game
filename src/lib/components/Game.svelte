@@ -22,11 +22,22 @@
   let sonic: THREE.Group;
   let pacman: THREE.Group;
 
+  // Collision boxes for characters
+  let marioBox: THREE.Box3;
+  let sonicBox: THREE.Box3;
+  let pacmanBox: THREE.Box3;
+
   onMount(() => {
     starryBackgroundScene = createStarryBackgroundScene();
     mario = createMario();
     sonic = createSonic();
     pacman = createPacman();
+    
+    // Initialize collision boxes
+    marioBox = new THREE.Box3().setFromObject(mario);
+    sonicBox = new THREE.Box3().setFromObject(sonic);
+    pacmanBox = new THREE.Box3().setFromObject(pacman);
+    
     animateCharacters();
   });
 
@@ -48,10 +59,18 @@
           direction *= -1;
         }
 
+        // Update character positions
+        mario.position.x = marioPosition.x;
+        sonic.position.x = sonicPosition.x;
+        pacman.position.x = pacmanPosition.x;
+
+        // Update collision boxes
+        marioBox.setFromObject(mario);
+        sonicBox.setFromObject(sonic);
+        pacmanBox.setFromObject(pacman);
+
         // Check for collision to start battle
-        if (Math.abs(marioPosition.x - sonicPosition.x) < 1 || 
-            Math.abs(marioPosition.x - pacmanPosition.x) < 1 || 
-            Math.abs(sonicPosition.x - pacmanPosition.x) < 1) {
+        if (checkCollision()) {
           battleMode = true;
           startBattle();
         }
@@ -61,12 +80,12 @@
         marioPosition.x += moveSpeed * Math.sign(-marioPosition.x);
         sonicPosition.x += moveSpeed * Math.sign(-sonicPosition.x);
         pacmanPosition.x += moveSpeed * Math.sign(-pacmanPosition.x);
-      }
 
-      // Update character positions
-      mario.position.x = marioPosition.x;
-      sonic.position.x = sonicPosition.x;
-      pacman.position.x = pacmanPosition.x;
+        // Update character positions
+        mario.position.x = marioPosition.x;
+        sonic.position.x = sonicPosition.x;
+        pacman.position.x = pacmanPosition.x;
+      }
 
       // Animate characters
       animateCharacter(mario, time);
@@ -77,6 +96,13 @@
     };
 
     animate(0);
+  }
+
+  // Collision detection function
+  function checkCollision(): boolean {
+    return marioBox.intersectsBox(sonicBox) || 
+           marioBox.intersectsBox(pacmanBox) || 
+           sonicBox.intersectsBox(pacmanBox);
   }
 
   function startBattle() {
@@ -94,7 +120,7 @@
     );
 
     if (characters.length <= 1) {
-      endBattle(characters[0]);
+      endBattle(characters[0] as 'mario' | 'sonic' | 'pacman');
       return;
     }
 

@@ -1,117 +1,130 @@
-<script>
+<script lang="ts">
   import * as THREE from 'three';
   import * as SC from 'svelte-cubed';
   import { onMount } from 'svelte';
   import { createStarryBackgroundScene } from '$lib/components/StarryBackground.svelte';
   import VideoOverlay from './VideoOverlay.svelte';
+  import { createMario, createSonic } from './characterCreation';
+  import { animateCharacter } from './animationUtils';
+  import { performAttack, resetAttackAnimation } from './attackAnimations';
 
-  let starryBackgroundScene;
+  let starryBackgroundScene: any;
   let marioPosition = { x: -2, y: 0, z: 0 };
   let sonicPosition = { x: 2, y: 0, z: 0 };
+  let marioHealth = 100;
+  let sonicHealth = 100;
+  let battleMode = false;
+  let battleLog: string[] = [];
+
+  let mario: THREE.Group;
+  let sonic: THREE.Group;
 
   onMount(() => {
     starryBackgroundScene = createStarryBackgroundScene();
+    mario = createMario();
+    sonic = createSonic();
     animateCharacters();
   });
 
   const videoSrc = 'video/GoldenLegendsMovievideo.mp4';
 
-  function createMario() {
-    const marioGroup = new THREE.Group();
-
-    // Body
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1.5, 0.5),
-      new THREE.MeshStandardMaterial({ color: 0xff0000 }) // Red
-    );
-    marioGroup.add(body);
-
-    // Head
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, 0.8, 0.8),
-      new THREE.MeshStandardMaterial({ color: 0xffa07a }) // Light salmon
-    );
-    head.position.y = 1.15;
-    marioGroup.add(head);
-
-    // Hat
-    const hat = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 0.3, 0.8),
-      new THREE.MeshStandardMaterial({ color: 0xff0000 }) // Red
-    );
-    hat.position.y = 1.6;
-    marioGroup.add(hat);
-
-    // Eyes
-    const eyeGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.1);
-    const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
-    const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    leftEye.position.set(-0.2, 1.2, 0.4);
-    const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    rightEye.position.set(0.2, 1.2, 0.4);
-    marioGroup.add(leftEye, rightEye);
-
-    return marioGroup;
-  }
-
-  function createSonic() {
-    const sonicGroup = new THREE.Group();
-
-    // Body
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1.5, 0.5),
-      new THREE.MeshStandardMaterial({ color: 0x1e90ff }) // Dodger blue
-    );
-    sonicGroup.add(body);
-
-    // Head
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 0.8, 0.8),
-      new THREE.MeshStandardMaterial({ color: 0x1e90ff }) // Dodger blue
-    );
-    head.position.y = 1.15;
-    sonicGroup.add(head);
-
-    // Spikes
-    const spikeGeometry = new THREE.BoxGeometry(0.2, 0.4, 0.2);
-    const spikeMaterial = new THREE.MeshStandardMaterial({ color: 0x1e90ff });
-    for (let i = 0; i < 5; i++) {
-      const spike = new THREE.Mesh(spikeGeometry, spikeMaterial);
-      spike.position.set(-0.4 + i * 0.2, 1.5, 0);
-      spike.rotation.z = Math.PI / 4;
-      sonicGroup.add(spike);
-    }
-
-    // Eyes
-    const eyeGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.1);
-    const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
-    const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    eye.position.set(0, 1.2, 0.4);
-    sonicGroup.add(eye);
-
-    return sonicGroup;
-  }
-
-  const mario = createMario();
-  const sonic = createSonic();
-
   function animateCharacters() {
     let direction = 1;
-    const animate = () => {
-      marioPosition.x += 0.05 * direction;
-      sonicPosition.x -= 0.05 * direction;
+    let lastTime = 0;
+    const animate = (time: number) => {
+      const deltaTime = time - lastTime;
+      lastTime = time;
 
-      if (Math.abs(marioPosition.x) > 4 || Math.abs(sonicPosition.x) > 4) {
-        direction *= -1;
+      if (!battleMode) {
+        marioPosition.x += 0.005 * direction;
+        sonicPosition.x -= 0.005 * direction;
+
+        if (Math.abs(marioPosition.x) > 4 || Math.abs(sonicPosition.x) > 4) {
+          direction *= -1;
+        }
+
+        // Check for collision to start battle
+        if (Math.abs(marioPosition.x - sonicPosition.x) < 1) {
+          battleMode = true;
+          startBattle();
+        }
+      } else {
+        // Move characters towards each other during battle
+        const moveSpeed = 0.001;
+        marioPosition.x += moveSpeed * Math.sign(sonicPosition.x - marioPosition.x);
+        sonicPosition.x += moveSpeed * Math.sign(marioPosition.x - sonicPosition.x);
       }
 
-      mario.position.set(marioPosition.x, marioPosition.y, marioPosition.z);
-      sonic.position.set(sonicPosition.x, sonicPosition.y, sonicPosition.z);
+      // Update character positions
+      mario.position.x = marioPosition.x;
+      sonic.position.x = sonicPosition.x;
+
+      // Animate characters
+      animateCharacter(mario, time);
+      animateCharacter(sonic, time);
 
       requestAnimationFrame(animate);
     };
 
-    animate();
+    animate(0);
+  }
+
+  function startBattle() {
+    battleLog = ["Battle started!"];
+    aiBattle();
+  }
+
+  function aiBattle() {
+    if (!battleMode) return;
+
+    const attacker = Math.random() < 0.5 ? 'mario' : 'sonic';
+    const defender = attacker === 'mario' ? 'sonic' : 'mario';
+
+    attack(attacker, defender);
+
+    if (battleMode) {
+      setTimeout(aiBattle, 2000); // Increased delay between attacks for better visibility
+    }
+  }
+
+  function attack(attacker: 'mario' | 'sonic', defender: 'mario' | 'sonic') {
+    const attackOptions = attacker === 'mario' 
+      ? ['fireball', 'jump', 'punch'] 
+      : ['spinDash', 'homing', 'kick'];
+    
+    const attackType = attackOptions[Math.floor(Math.random() * attackOptions.length)];
+    const damage = performAttack(attacker === 'mario' ? mario : sonic, attackType);
+
+    if (defender === 'mario') {
+      marioHealth -= damage;
+      if (marioHealth <= 0) {
+        endBattle('sonic');
+      }
+    } else {
+      sonicHealth -= damage;
+      if (sonicHealth <= 0) {
+        endBattle('mario');
+      }
+    }
+
+    battleLog.push(`${attacker} uses ${attackType} on ${defender} for ${damage} damage!`);
+    battleLog = battleLog.slice(-5); // Keep only the last 5 log entries
+
+    // Reset attack animation after a delay
+    setTimeout(() => resetAttackAnimation(attacker === 'mario' ? mario : sonic), 1000);
+  }
+
+  function endBattle(winner: 'mario' | 'sonic') {
+    battleMode = false;
+    battleLog.push(`${winner} wins the battle!`);
+    setTimeout(() => {
+      // Reset health and positions after a delay
+      marioHealth = 100;
+      sonicHealth = 100;
+      marioPosition = { x: -2, y: 0, z: 0 };
+      sonicPosition = { x: 2, y: 0, z: 0 };
+      battleLog = [];
+    }, 3000);
   }
 </script>
 
@@ -133,3 +146,14 @@
   <SC.Primitive object={mario} />
   <SC.Primitive object={sonic} />
 </SC.Canvas>
+
+<div style="position: absolute; top: 10px; left: 10px; color: white;">
+  Mario Health: {marioHealth}
+  Sonic Health: {sonicHealth}
+  <p>Battle Mode: {battleMode ? 'ON' : 'OFF'}</p>
+  <ul>
+    {#each battleLog as log}
+      <li>{log}</li>
+    {/each}
+  </ul>
+</div>

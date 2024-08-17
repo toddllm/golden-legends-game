@@ -1,2 +1,26 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://kit.svelte.dev">kit.svelte.dev</a> to read the documentation</p>
+<script>
+    import Game from '$lib/components/Game.svelte';
+  </script>
+  
+  <main>
+    <h1>Golden Legends</h1>
+    <Game />
+  </main>
+  
+  <style>
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #202020;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+  
+    h1 {
+      margin-bottom: 20px;
+    }
+  </style>
+  

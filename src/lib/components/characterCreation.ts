@@ -96,5 +96,8 @@ export function createPacman() {
   eye.position.set(0.2, 0.3, 0.4);
   pacmanGroup.add(eye);
 
+  // Adjust initial rotation so that Pac-Man faces the correct direction.
+  pacmanGroup.rotation.set(Math.PI / 2, 0, 0); // Rotate 90 degrees around X-axis
+
   return pacmanGroup;
 }

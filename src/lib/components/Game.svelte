@@ -1,192 +1,33 @@
 <script lang="ts">
-  import * as THREE from 'three';
-  import * as SC from 'svelte-cubed';
   import { onMount } from 'svelte';
-  import { createStarryBackgroundScene } from '$lib/components/StarryBackground.svelte';
   import VideoOverlay from './VideoOverlay.svelte';
-  import { createMario, createSonic, createPacman } from './characterCreation';
-  import { animateCharacter } from './animationUtils';
-  import { performAttack, resetAttackAnimation } from './attackAnimations';
+  import { CharacterManager } from './CharacterManager';
+  import { BattleManager } from './BattleManager';
+  import { createStarryBackgroundScene } from '$lib/components/StarryBackground.svelte';
+  import * as SC from 'svelte-cubed';
 
   let starryBackgroundScene: any;
-  let marioPosition = { x: -3, y: 0, z: 0 };
-  let sonicPosition = { x: 0, y: 0, z: 0 };
-  let pacmanPosition = { x: 3, y: 0, z: 0 };
-  let marioHealth = 100;
-  let sonicHealth = 100;
-  let pacmanHealth = 100;
-  let battleMode = false;
+  let characterManager: CharacterManager;
+  let battleManager: BattleManager;
+
   let battleLog: string[] = [];
-
-  let mario: THREE.Group;
-  let sonic: THREE.Group;
-  let pacman: THREE.Group;
-
-  // Collision boxes for characters
-  let marioBox: THREE.Box3;
-  let sonicBox: THREE.Box3;
-  let pacmanBox: THREE.Box3;
+  const videoSrc = 'video/GoldenLegendsMovievideo.mp4';
 
   onMount(() => {
     starryBackgroundScene = createStarryBackgroundScene();
-    mario = createMario();
-    sonic = createSonic();
-    pacman = createPacman();
-    
-    // Initialize collision boxes
-    marioBox = new THREE.Box3().setFromObject(mario);
-    sonicBox = new THREE.Box3().setFromObject(sonic);
-    pacmanBox = new THREE.Box3().setFromObject(pacman);
-    
-    animateCharacters();
-  });
+    characterManager = new CharacterManager();
+    battleManager = new BattleManager(characterManager);
 
-  const videoSrc = 'video/GoldenLegendsMovievideo.mp4';
-
-  function animateCharacters() {
-    let direction = 1;
-    let lastTime = 0;
-    const animate = (time: number) => {
-      const deltaTime = time - lastTime;
-      lastTime = time;
-
-      if (!battleMode) {
-        marioPosition.x += 0.005 * direction;
-        sonicPosition.x += 0.005 * direction;
-        pacmanPosition.x -= 0.005 * direction;
-
-        if (Math.abs(marioPosition.x) > 4 || Math.abs(sonicPosition.x) > 4 || Math.abs(pacmanPosition.x) > 4) {
-          direction *= -1;
-        }
-
-        // Update character positions
-        mario.position.x = marioPosition.x;
-        sonic.position.x = sonicPosition.x;
-        pacman.position.x = pacmanPosition.x;
-
-        // Update collision boxes
-        marioBox.setFromObject(mario);
-        sonicBox.setFromObject(sonic);
-        pacmanBox.setFromObject(pacman);
-
-        // Check for collision to start battle
-        if (checkCollision()) {
-          battleMode = true;
-          startBattle();
-        }
-      } else {
-        // Move characters towards center during battle
-        const moveSpeed = 0.001;
-        marioPosition.x += moveSpeed * Math.sign(-marioPosition.x);
-        sonicPosition.x += moveSpeed * Math.sign(-sonicPosition.x);
-        pacmanPosition.x += moveSpeed * Math.sign(-pacmanPosition.x);
-
-        // Update character positions
-        mario.position.x = marioPosition.x;
-        sonic.position.x = sonicPosition.x;
-        pacman.position.x = pacmanPosition.x;
+    characterManager.animateCharacters(() => {
+      if (!battleManager.battleMode && characterManager.checkCollision()) {
+        battleManager.startBattle();
       }
+    });
 
-      // Animate characters
-      animateCharacter(mario, time);
-      animateCharacter(sonic, time);
-      animateCharacter(pacman, time);
-
-      requestAnimationFrame(animate);
-    };
-
-    animate(0);
-  }
-
-  // Collision detection function
-  function checkCollision(): boolean {
-    return marioBox.intersectsBox(sonicBox) || 
-           marioBox.intersectsBox(pacmanBox) || 
-           sonicBox.intersectsBox(pacmanBox);
-  }
-
-  function startBattle() {
-    battleLog = ["Battle started!"];
-    aiBattle();
-  }
-
-  function aiBattle() {
-    if (!battleMode) return;
-
-    const characters = ['mario', 'sonic', 'pacman'].filter(char => 
-      char === 'mario' ? marioHealth > 0 : 
-      char === 'sonic' ? sonicHealth > 0 : 
-      pacmanHealth > 0
-    );
-
-    if (characters.length <= 1) {
-      endBattle(characters[0] as 'mario' | 'sonic' | 'pacman');
-      return;
-    }
-
-    const attacker = characters[Math.floor(Math.random() * characters.length)] as 'mario' | 'sonic' | 'pacman';
-    let defender;
-    do {
-      defender = characters[Math.floor(Math.random() * characters.length)] as 'mario' | 'sonic' | 'pacman';
-    } while (defender === attacker);
-
-    attack(attacker, defender);
-
-    if (battleMode) {
-      setTimeout(aiBattle, 2000); // Increased delay between attacks for better visibility
-    }
-  }
-
-  function attack(attacker: 'mario' | 'sonic' | 'pacman', defender: 'mario' | 'sonic' | 'pacman') {
-    const attackOptions = 
-      attacker === 'mario' ? ['fireball', 'jump', 'punch'] :
-      attacker === 'sonic' ? ['spinDash', 'homing', 'kick'] :
-      ['chomp', 'powerPellet', 'ghostEat'];
-    
-    const attackType = attackOptions[Math.floor(Math.random() * attackOptions.length)];
-    const damage = performAttack(
-      attacker === 'mario' ? mario : 
-      attacker === 'sonic' ? sonic : 
-      pacman, 
-      attackType
-    );
-
-    if (defender === 'mario') {
-      marioHealth -= damage;
-      if (marioHealth <= 0) marioHealth = 0;
-    } else if (defender === 'sonic') {
-      sonicHealth -= damage;
-      if (sonicHealth <= 0) sonicHealth = 0;
-    } else {
-      pacmanHealth -= damage;
-      if (pacmanHealth <= 0) pacmanHealth = 0;
-    }
-
-    battleLog.push(`${attacker} uses ${attackType} on ${defender} for ${damage} damage!`);
-    battleLog = battleLog.slice(-5); // Keep only the last 5 log entries
-
-    // Reset attack animation after a delay
-    setTimeout(() => resetAttackAnimation(
-      attacker === 'mario' ? mario : 
-      attacker === 'sonic' ? sonic : 
-      pacman
-    ), 1000);
-  }
-
-  function endBattle(winner: 'mario' | 'sonic' | 'pacman') {
-    battleMode = false;
-    battleLog.push(`${winner} wins the battle!`);
-    setTimeout(() => {
-      // Reset health and positions after a delay
-      marioHealth = 100;
-      sonicHealth = 100;
-      pacmanHealth = 100;
-      marioPosition = { x: -3, y: 0, z: 0 };
-      sonicPosition = { x: 0, y: 0, z: 0 };
-      pacmanPosition = { x: 3, y: 0, z: 0 };
-      battleLog = [];
-    }, 3000);
-  }
+    battleManager.onBattleLogUpdate((log) => {
+      battleLog = log.slice(-5);
+    });
+  });
 </script>
 
 <VideoOverlay {videoSrc} />
@@ -204,16 +45,16 @@
     </SC.Group>
   {/if}
 
-  <SC.Primitive object={mario} />
-  <SC.Primitive object={sonic} />
-  <SC.Primitive object={pacman} />
+  <SC.Primitive object={characterManager.mario} />
+  <SC.Primitive object={characterManager.sonic} />
+  <SC.Primitive object={characterManager.pacman} />
 </SC.Canvas>
 
 <div style="position: absolute; top: 10px; left: 10px; color: white;">
-  Mario Health: {marioHealth}
-  Sonic Health: {sonicHealth}
-  Pac-Man Health: {pacmanHealth}
-  <p>Battle Mode: {battleMode ? 'ON' : 'OFF'}</p>
+  Mario Health: {characterManager.marioHealth}
+  Sonic Health: {characterManager.sonicHealth}
+  Pac-Man Health: {characterManager.pacmanHealth}
+  <p>Battle Mode: {battleManager.battleMode ? 'ON' : 'OFF'}</p>
   <ul>
     {#each battleLog as log}
       <li>{log}</li>
